@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
-import '../../data/mock_products.dart';
-import '../../models/product.dart';
+import 'package:get/get.dart';
 import '../widgets/chips.dart';
 import '../widgets/price_tag.dart';
 import '../widgets/rating_stars.dart';
 import '../widgets/product_card_small.dart';
 import '../../routes/app_router.dart';
+import '../../data/v3.dart';
 
 class ProductPage extends StatefulWidget {
-  final String productId;
-  const ProductPage({super.key, required this.productId});
+  const ProductPage({super.key});
 
   @override
   State<ProductPage> createState() => _ProductPageState();
 }
 
 class _ProductPageState extends State<ProductPage> {
-  late final Product product;
+  late Map<String, dynamic> product;
   int imageIndex = 0;
   String? selectedColor;
   String? selectedSize;
@@ -24,18 +23,24 @@ class _ProductPageState extends State<ProductPage> {
   @override
   void initState() {
     super.initState();
-    product = byId(widget.productId);
-    selectedColor = product.colors.isNotEmpty ? product.colors.first : null;
-    selectedSize = product.sizes.isNotEmpty ? product.sizes.first : null;
+    product = Get.arguments;
+
+    final colors = product["colors"] as List<dynamic>? ?? [];
+    final sizes = product["sizes"] as List<dynamic>? ?? [];
+
+    selectedColor = colors.isNotEmpty ? colors.first["name"] : null;
+    selectedSize = sizes.isNotEmpty ? sizes.first : null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final also = allProducts.where((p) => p.id != product.id).toList();
+    final also = (details["relatedProducts"] as List)
+        .map((e) => e as Map<String, dynamic>)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(product.title),
+        title: Text(product["title"] ?? "Product"),
         actions: [
           IconButton(onPressed: () {}, icon: const Icon(Icons.ios_share)),
           IconButton(onPressed: () {}, icon: const Icon(Icons.favorite_border)),
@@ -43,26 +48,33 @@ class _ProductPageState extends State<ProductPage> {
       ),
       body: ListView(
         children: [
+          // carousel imagini
           SizedBox(
             height: 420,
             child: PageView.builder(
-              itemCount: product.images.length,
+              itemCount: (product["colors"]?[0]["images"] as List?)?.length ?? 1,
               onPageChanged: (i) => setState(() => imageIndex = i),
               itemBuilder: (_, i) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(product.images[i], fit: BoxFit.contain),
+                  child: Image.network(
+                    product["colors"]?[0]["images"][i] ??
+                        product["image"] ??
+                        '',
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 8),
+
           // indicator
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              product.images.length,
+              (product["colors"]?[0]["images"] as List?)?.length ?? 1,
                   (i) => Container(
                 width: 8,
                 height: 8,
@@ -76,6 +88,7 @@ class _ProductPageState extends State<ProductPage> {
           ),
           const SizedBox(height: 12),
 
+          //  detalii produs
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -85,11 +98,11 @@ class _ProductPageState extends State<ProductPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(product.brand,
+                      Text(product["brand"] ?? "",
                           style: const TextStyle(
                               fontSize: 13, color: Colors.black54)),
                       const SizedBox(height: 4),
-                      Text(product.title,
+                      Text(product["title"] ?? "",
                           style: Theme.of(context)
                               .textTheme
                               .titleLarge
@@ -97,112 +110,98 @@ class _ProductPageState extends State<ProductPage> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          RatingStars(rating: product.rating, size: 18),
+                          RatingStars(
+                            rating: (product["rating"] ?? 0).toDouble(),
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
-                          Text('(${product.reviewsCount})',
+                          Text('(${product["reviewsCount"] ?? 0})',
                               style: const TextStyle(color: Colors.black54)),
                         ],
                       ),
                     ],
                   ),
                 ),
-                PriceTag(price: product.price, oldPrice: product.oldPrice),
+                PriceTag(
+                  price: (product["price"] ?? 0).toDouble(),
+                  oldPrice: (product["oldPrice"] ?? 0).toDouble(),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 16),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Wrap(
-              runSpacing: 10,
-              spacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (product.sizes.isNotEmpty) ...[
-                  const Text('Size:', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ...product.sizes.map((s) => SizeChip(
-                    label: s,
+          if (product["sizes"] != null &&
+              (product["sizes"] as List).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  const Text('Size:',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  ...(product["sizes"] as List).map((s) => SizeChip(
+                    label: s.toString(),
                     selected: s == selectedSize,
                     onTap: () => setState(() => selectedSize = s),
                   )),
                 ],
-              ],
+              ),
             ),
-          ),
+
           const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Wrap(
-              spacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (product.colors.isNotEmpty) ...[
-                  const Text('Color:', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ...product.colors.map((c) => ColorChipDot(
-                    name: c,
-                    selected: c == selectedColor,
-                    onTap: () => setState(() => selectedColor = c),
+
+          if (product["colors"] != null &&
+              (product["colors"] as List).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Color:',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  ...(product["colors"] as List).map((c) => ColorChipDot(
+                    name: c["name"],
+                    selected: c["name"] == selectedColor,
+                    onTap: () =>
+                        setState(() => selectedColor = c["name"]),
                   )),
                 ],
-              ],
+              ),
             ),
-          ),
+
           const SizedBox(height: 16),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(product.description),
+            child: Text(product["description"] ?? ""),
           ),
+
           const SizedBox(height: 16),
 
+          //buton
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: ElevatedButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                        'Added to cart: ${product.title} — $selectedSize, $selectedColor'),
-                  ),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                      'Added to cart: ${product["title"]} — $selectedSize, $selectedColor'),
+                ));
               },
               child: const Text('ADD TO CART'),
             ),
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: 16),
           const Divider(height: 24),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: ExpansionTile(
-              title: const Text('Shipping info'),
-              children: const [
-                Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Standard delivery 3–5 days. Free over \$50.'),
-                )
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: ExpansionTile(
-              title: const Text('Support'),
-              children: const [
-                Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('30-day returns. Contact support@example.com'),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 24),
-
+          //produse recomandate
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text('You can also like this',
+            child: Text('You may also like',
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
@@ -218,11 +217,7 @@ class _ProductPageState extends State<ProductPage> {
               separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (context, i) => ProductCardSmall(
                 product: also[i],
-                onTap: () => Navigator.pushReplacementNamed(
-                  context,
-                  AppRoutes.product,
-                  arguments: also[i].id,
-                ),
+                onTap: () => Get.off(() => const ProductPage(), arguments: also[i]),
               ),
             ),
           ),
